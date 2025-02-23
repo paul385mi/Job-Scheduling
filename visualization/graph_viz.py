@@ -52,28 +52,23 @@ def visualize_production_graph(G, conflict_edges):
     return fig, ax
 
 def print_step_report(env, action, reward, info, last_history, new_finished):
-    '''
-    Erstellt einen formatierten Bericht über den aktuellen Simulationsschritt.
+    print("\n================ Simulation Step Summary ================\n")
+    print(f"Time: {env.env.now:.2f}")
+    print(f"Action (Mode, Count): {action}")
+    print(f"Reward: {reward:.3f}")
+    print(f"Total Finished Jobs: {len(env.simulation.job_finish_times)}")
+    print(f"Total Waiting Jobs: {len(env.simulation.waiting_jobs)}")
+    print(f"Machine Utilization: {sum(1 for m in env.simulation.machines.values() if m.count > 0)}/{len(env.simulation.machines)}")
     
-    Parameter:
-    - env: Simulationsumgebung mit Zustandsinformationen
-    - action: Ausgeführte Aktion im aktuellen Schritt
-    - reward: Erhaltene Belohnung für die Aktion
-    - info: Dictionary mit zusätzlichen Informationen, insbesondere Nachbestellungsereignisse
-    - last_history: Liste der zuletzt gestarteten Jobs mit Prioritäten
-    - new_finished: Dictionary der neu fertiggestellten Jobs mit Zeitstempel und Priorität
-    '''
-    # Ausgabe der grundlegenden Simulationsinformationen
-    print("=" * 50)
-    print("Simulation Step Summary")
-    print("=" * 50)
-    print(f"Time:           {env.env.now:.2f}")      # Aktuelle Simulationszeit
-    print(f"Action:         {action}")               # Ausgeführte Aktion
-    print(f"Reward:         {reward:.3f}")          # Erhaltene Belohnung
-    print(f"Finished Jobs:  {env.simulation.finished_jobs}")  # Anzahl fertiger Jobs
-    print(f"Waiting Jobs:   {len(env.simulation.waiting_jobs)}")  # Anzahl wartender Jobs
-    print(f"Total Cost:     {env.simulation.total_cost}")  # Gesamtkosten
-    print("-" * 50)
+    print("\n--- Newly Finished Jobs ---")
+    for job, (ft, priority) in new_finished.items():
+        print(f"  {job}: Finished at {ft:.2f} (Priority: {priority})")
+
+    print("\n--- Machine Status ---")
+    for machine, resource in env.simulation.machines.items():
+        print(f"  {machine}: {resource.count} jobs running")
+
+    print("========================================================\n")
     
     # Ausgabe der Nachbestellungsereignisse, falls vorhanden
     print("Reorder Events:")

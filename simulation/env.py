@@ -28,8 +28,8 @@ class RealisticSchedulingEnv(gym.Env):
         self.pyg_data = pyg_data
         self.jobs_data = jobs_data
         
-        # Definition des Zustandsraums (8 Embedding + 5 Metriken = 13 Dimensionen)
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
+        # Definition des Zustandsraums (8D Embedding + 3D Metriken = 11 Dimensionen)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(11,), dtype=np.float32)
         # Definition des Aktionsraums: [Scheduling-Modus (3), Anzahl Jobs (20)]
         self.action_space = spaces.MultiDiscrete([3, 20])
         
@@ -75,16 +75,13 @@ class RealisticSchedulingEnv(gym.Env):
             out = self.transformer_model(self.pyg_data.x, self.pyg_data.edge_index)
         global_embedding = out.mean(dim=0).numpy()
         
-        # Aktuelle Simulationsmetriken sammeln
+        # Erweiterte Metriken sammeln
         current_makespan = self.simulation.current_makespan
-        current_time = self.env.now
-        finished_jobs = self.simulation.finished_jobs
+        machine_utilization = len([m for m in self.simulation.machines.values() if m.count > 0]) / len(self.simulation.machines)
         waiting_jobs_count = len(self.simulation.waiting_jobs)
-        total_cost = self.simulation.total_cost
         
-        # Metriken zu einem Numpy-Array zusammenfassen
-        sim_metrics = np.array([current_makespan, current_time, finished_jobs, 
-                              waiting_jobs_count, total_cost], dtype=np.float32)
+        # Kombinierte Metriken
+        sim_metrics = np.array([current_makespan, machine_utilization, waiting_jobs_count], dtype=np.float32)
         
         # Gesamtzustand aus Embedding und Metriken erstellen
         self.state = np.concatenate((global_embedding, sim_metrics))
@@ -176,8 +173,28 @@ class RealisticSchedulingEnv(gym.Env):
                        if job not in self.reported_finished_jobs}
         self.reported_finished_jobs.update(new_finished.keys())
         
-        # Belohnung berechnen: Maximale Belohnung (1000) minus Makespan und Kosten
-        reward = 1000 - (self.simulation.current_makespan + self.simulation.total_cost)
+        # Makespan-orientierte Belohnungsberechnung
+        current_makespan = self.simulation.current_makespan
+        prev_makespan = self.history[-1][0] if self.history else 0
+        makespan_delta = current_makespan - prev_makespan
+        
+        # Hauptkomponente: Makespan-Minimierung
+        makespan_reward = -makespan_delta
+        
+        # Zusätzliche Komponenten für effiziente Scheduling-Entscheidungen
+        utilization_factor = len([m for m in self.simulation.machines.values() if m.count > 0]) / len(self.simulation.machines)
+        completion_bonus = len(new_finished) * 50 if new_finished else 0
+        
+        # Bestrafung für Leerlauf
+        idle_penalty = 0
+        if not selected_jobs and len(self.simulation.waiting_jobs) > 0:
+            idle_penalty = -100
+        
+        # Gesamtbelohnung mit Gewichtung auf Makespan-Minimierung
+        reward = makespan_reward * 2.0 + \
+                 utilization_factor * 100 + \
+                 completion_bonus + \
+                 idle_penalty
         
         # Prüfen ob alle Jobs abgearbeitet sind
         done = (len(self.simulation.waiting_jobs) == 0)

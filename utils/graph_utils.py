@@ -111,6 +111,7 @@ def build_graph(data_json):
                 else:
                     G.add_edge(vorgaenger, op_name)
     return G, op_to_job
+    
 
 def add_machine_conflicts(G, op_to_job):
     """
