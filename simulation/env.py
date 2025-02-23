@@ -173,28 +173,57 @@ class RealisticSchedulingEnv(gym.Env):
                        if job not in self.reported_finished_jobs}
         self.reported_finished_jobs.update(new_finished.keys())
         
-        # Makespan-orientierte Belohnungsberechnung
+        # 1. Makespan-Komponente
         current_makespan = self.simulation.current_makespan
         prev_makespan = self.history[-1][0] if self.history else 0
         makespan_delta = current_makespan - prev_makespan
+        makespan_reward = -makespan_delta * 3.0  # Erhöhte Gewichtung
         
-        # Hauptkomponente: Makespan-Minimierung
-        makespan_reward = -makespan_delta
+        # 2. Maschinenauslastung
+        active_machines = len([m for m in self.simulation.machines.values() if m.count > 0])
+        total_machines = len(self.simulation.machines)
+        utilization_factor = active_machines / total_machines
+        utilization_reward = utilization_factor * 150  # Erhöhte Gewichtung
         
-        # Zusätzliche Komponenten für effiziente Scheduling-Entscheidungen
-        utilization_factor = len([m for m in self.simulation.machines.values() if m.count > 0]) / len(self.simulation.machines)
-        completion_bonus = len(new_finished) * 50 if new_finished else 0
+        # 3. Job-Fertigstellung und Priorisierung
+        completion_reward = 0
+        for job, (finish_time, priority) in new_finished.items():
+            # Basis-Bonus für Fertigstellung
+            completion_reward += 75
+            # Zusätzlicher Bonus basierend auf Priorität
+            completion_reward += priority * 15
+            # Bonus für schnelle Fertigstellung
+            if finish_time < current_makespan * 0.8:
+                completion_reward += 50
         
-        # Bestrafung für Leerlauf
-        idle_penalty = 0
+        # 4. Scheduling-Effizienz
+        scheduling_reward = 0
+        if selected_jobs:
+            # Bonus für parallele Verarbeitung
+            if len(selected_jobs) > 1:
+                scheduling_reward += 30 * len(selected_jobs)
+            
+            # Bonus für Priorisierung wichtiger Jobs
+            avg_priority = sum(priority for _, priority in started_jobs) / len(started_jobs)
+            if avg_priority > 5:  # Bonus für hochpriore Jobs
+                scheduling_reward += 40
+        
+        # 5. Bestrafungen
+        penalties = 0
+        # Bestrafung für Leerlauf trotz wartender Jobs
         if not selected_jobs and len(self.simulation.waiting_jobs) > 0:
-            idle_penalty = -100
+            penalties -= 200
+        # Bestrafung für zu lange Wartezeiten
+        long_waiting_jobs = len([j for j in self.simulation.waiting_jobs 
+                               if j.get('Priorität', 0) > 7])
+        penalties -= long_waiting_jobs * 30
         
-        # Gesamtbelohnung mit Gewichtung auf Makespan-Minimierung
-        reward = makespan_reward * 2.0 + \
-                 utilization_factor * 100 + \
-                 completion_bonus + \
-                 idle_penalty
+        # Gesamtbelohnung
+        reward = makespan_reward + \
+                utilization_reward + \
+                completion_reward + \
+                scheduling_reward + \
+                penalties
         
         # Prüfen ob alle Jobs abgearbeitet sind
         done = (len(self.simulation.waiting_jobs) == 0)

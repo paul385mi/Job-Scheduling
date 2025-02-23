@@ -34,7 +34,7 @@ def main():
     # - min_ops: Minimale Anzahl an Operationen pro Auftrag (2)
     # - max_ops: Maximale Anzahl an Operationen pro Auftrag (5)
     config = ProductionConfig(
-        n_jobs=50,
+        n_jobs=30,
         min_ops=2,
         max_ops=5
     )
