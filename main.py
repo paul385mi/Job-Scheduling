@@ -13,6 +13,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from pathlib import Path
 import numpy as np
+import torch.nn as nn
 
 from data_handlers.json_handler import load_data_from_json
 from data_handlers.data_generator import ProductionConfig, generate_test_data
@@ -119,26 +120,43 @@ def main():
     
     # Definiere den TensorBoard-Logordner vor der Verwendung
     tensorboard_log_dir = "./tensorboard_logs/"
-
+    
+    # Learning Rate Scheduling-Funktion
+    def linear_schedule(initial_value, final_value):
+        def schedule(progress):
+            return final_value + (initial_value - final_value) * (1 - progress)
+        return schedule
+    
+    # Optimierte PPO-Konfiguration
     ppo_model = PPO(
         "MlpPolicy",
         env,
-        learning_rate=0.0003,  # Erhöht für schnelleres Lernen
-        n_steps=1024,         # Reduziert für häufigere Updates
-        batch_size=128,       # Erhöht für stabileres Training
-        n_epochs=5,           # Reduziert zur Vermeidung von Overfitting
-        gamma=0.995,          # Erhöht für bessere Langzeitbelohnungen
-        gae_lambda=0.95,      # Gutes Gleichgewicht zwischen Bias und Varianz
-        clip_range=0.2,       # Standard-Clipping-Parameter
-        ent_coef=0.01,        # Leicht erhöht für mehr Exploration
-        vf_coef=0.5,          # Standardwert für Value Function
-        max_grad_norm=0.5,    # Gradient Clipping für Stabilität
+        learning_rate=linear_schedule(0.0005, 0.0001),  # Dynamische Learning Rate
+        n_steps=2048,          # Größere Batch-Größe für stabileres Training
+        batch_size=512,        # Vergrößert für bessere Generalisierung
+        n_epochs=10,           # Mehr Epochen pro Update
+        gamma=0.99,           # Optimale Diskontierung für Langzeitbelohnungen
+        gae_lambda=0.95,      # Gutes Gleichgewicht für GAE
+        clip_range=0.3,       # Größerer Clipping-Bereich für mehr Flexibilität
+        clip_range_vf=0.3,    # Separate Value Function Clipping
+        ent_coef=0.02,        # Erhöhte Exploration
+        vf_coef=0.7,          # Stärkere Value Function Gewichtung
+        max_grad_norm=0.7,    # Erhöhtes Gradient Clipping
+        target_kl=0.02,       # KL-Divergenz Zielwert
         verbose=1,
-        tensorboard_log=tensorboard_log_dir
+        tensorboard_log=tensorboard_log_dir,
+        policy_kwargs={
+            "net_arch": {
+                "pi": [256, 256],  # Tieferes Policy-Netzwerk
+                "vf": [256, 256]   # Tieferes Value-Netzwerk
+            },
+            "activation_fn": nn.ReLU,
+            "ortho_init": True
+        }
     )
 
-    # Training mit erhöhter Anzahl von Timesteps für bessere Konvergenz
-    total_timesteps = 100000  # Verdoppelt für besseres Training
+    # Erhöhte Trainingszeit für bessere Konvergenz
+    total_timesteps = 200000
     print(f"Starte Training für {total_timesteps} Schritte...")
     ppo_model.learn(
         total_timesteps=total_timesteps,

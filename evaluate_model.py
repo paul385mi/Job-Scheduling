@@ -11,6 +11,14 @@
 # 	•	Lösung: Versuch alternative Optimierungsstrategien, wie learning_rate-Decay oder eine andere gamma-Wert.
 
 
+
+# Problem	Was passiert hier?	Lösung
+# Reward bleibt lange konstant	Modell bleibt bei einer Strategie hängen.	Erhöhe entropy_coef, um mehr Exploration zu fördern.
+# Exploration stoppt zu früh	Modell hat zu schnell eine Lösung akzeptiert.	Erhöhe n_steps und gamma, damit es langfristiger plant.
+# Reward-Schwankungen am Anfang	Modell testet zufällig viele Strategien.	Das ist normal, aber learning_rate könnte leicht gesenkt werden, um stabiler zu lernen.
+# Starker Reward-Sprung (~75.000 Schritte)	Modell hat plötzlich eine funktionierende Strategie gefunden.	Prüfen, ob es eine optimale oder nur eine lokale Lösung ist.
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import os
